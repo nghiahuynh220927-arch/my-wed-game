@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Đăng nhập - Dị Giới</title>
+
+    <style>
+        :root {
+            --gold: #d9b45a;
+            --blood: #c92a2a;
+            --ink: #f3ece0;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            color: var(--ink);
+            font-family: Georgia, "Times New Roman", serif;
+            background:
+                radial-gradient(ellipse at center, rgba(120, 20, 20, 0.35), transparent 70%),
+                #150202 url('bg.png') center / cover no-repeat;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 360px;
+            padding: 26px 22px 22px;
+            background: rgba(18, 12, 10, 0.9);
+            border: 2px solid rgba(217, 180, 90, 0.6);
+            border-radius: 18px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+        }
+
+        h1 {
+            margin: 0 0 4px;
+            text-align: center;
+            font-size: 26px;
+            letter-spacing: 2px;
+            color: var(--gold);
+            text-shadow: 0 0 12px rgba(201, 42, 42, 0.8);
+        }
+
+        .sub {
+            margin: 0 0 18px;
+            text-align: center;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 18px;
+            border: 1px solid rgba(217, 180, 90, 0.35);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px 0;
+            border: 0;
+            background: transparent;
+            color: var(--ink);
+            font: inherit;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .tab.active {
+            background: rgba(201, 42, 42, 0.55);
+            font-weight: bold;
+        }
+
+        label {
+            display: block;
+            margin: 12px 0 5px;
+            font-size: 12px;
+            color: var(--gold);
+        }
+
+        input {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid rgba(217, 180, 90, 0.4);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--ink);
+            font: inherit;
+            font-size: 16px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #ff6a6a;
+            box-shadow: 0 0 8px rgba(255, 90, 90, 0.35);
+        }
+
+        #confirmBox { display: none; }
+
+        .submit {
+            width: 100%;
+            margin-top: 20px;
+            padding: 12px;
+            border: 2px solid var(--gold);
+            border-radius: 12px;
+            background: radial-gradient(circle at 35% 30%, #a02020, #4a0c0c 70%);
+            color: var(--ink);
+            font: inherit;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .submit:disabled { opacity: 0.6; cursor: wait; }
+
+        #msg {
+            min-height: 18px;
+            margin-top: 12px;
+            text-align: center;
+            font-size: 13px;
+            color: #ff7a7a;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>Dị Giới</h1>
+        <p class="sub">U Minh Dẫn Lối...</p>
+
+        <div class="tabs">
+            <button class="tab active" id="tabLogin" type="button">Đăng nhập</button>
+            <button class="tab" id="tabRegister" type="button">Tạo tài khoản</button>
+        </div>
+
+        <form id="form" autocomplete="on">
+            <label for="username">Tên tài khoản</label>
+            <input id="username" name="username" maxlength="16"
+                   autocomplete="username" autocapitalize="none" spellcheck="false">
+
+            <label for="password">Mật khẩu</label>
+            <input id="password" name="password" type="password" maxlength="64"
+                   autocomplete="current-password">
+
+            <div id="confirmBox">
+                <label for="password2">Nhập lại mật khẩu</label>
+                <input id="password2" type="password" maxlength="64"
+                       autocomplete="new-password">
+            </div>
+
+            <button class="submit" id="submitBtn" type="submit">Đăng nhập</button>
+            <div id="msg"></div>
+        </form>
+    </div>
+
+    <script>
+       
+
+        let mode = 'login';
+
+        const tabLogin = document.getElementById('tabLogin');
+        const tabRegister = document.getElementById('tabRegister');
+        const confirmBox = document.getElementById('confirmBox');
+        const submitBtn = document.getElementById('submitBtn');
+        const msg = document.getElementById('msg');
+        const passInput = document.getElementById('password');
+
+        function setMode(m) {
+            mode = m;
+            const isLogin = m === 'login';
+
+            tabLogin.classList.toggle('active', isLogin);
+            tabRegister.classList.toggle('active', !isLogin);
+
+            confirmBox.style.display = isLogin ? 'none' : 'block';
+            submitBtn.textContent = isLogin ? 'Đăng nhập' : 'Tạo tài khoản';
+            passInput.autocomplete = isLogin ? 'current-password' : 'new-password';
+            msg.textContent = '';
+        }
+
+        tabLogin.addEventListener('click', () => setMode('login'));
+        tabRegister.addEventListener('click', () => setMode('register'));
+
+        document.getElementById('form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = passInput.value;
+            const password2 = document.getElementById('password2').value;
+
+            if (!username || !password) {
+                msg.textContent = 'Hãy nhập đủ tên tài khoản và mật khẩu.';
+                return;
+            }
+
+            if (mode === 'register' && password !== password2) {
+                msg.textContent = 'Hai mật khẩu không giống nhau.';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            msg.style.color = '#f3ece0';
+            msg.textContent = 'Đang xử lý...';
+
+            try {
+                const res = await fetch('/api/' + mode, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    msg.style.color = '#ff7a7a';
+                    msg.textContent = data.error || 'Có lỗi xảy ra.';
+                    submitBtn.disabled = false;
+                    return;
+                }
+
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('username', data.username);
+                location.href = '/game.html';
+
+            } catch (err) {
+                msg.style.color = '#ff7a7a';
+                msg.textContent = 'Không kết nối được server.';
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
