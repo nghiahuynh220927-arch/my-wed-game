@@ -63,7 +63,7 @@ function spawnMonster() {
 for (let i = 0; i < MONSTER_COUNT; i++) spawnMonster();
 
 // ---- Kinh nghiệm và cấp độ ----
-const EXP_MONSTER = 25; // chỉ hạ quái mới nhận EXP
+const EXP_MONSTER = 25; 
 function addExp(socketId, amount) {
     const p = players[socketId];
     if (!p) return;
@@ -117,7 +117,7 @@ function damagePlayer(id, amount) {
 function hitArea(attackerId, range, dmg) {
     const me = players[attackerId];
     if (!me) return;
-    dmg += (me.level - 1) * 4; // mỗi cấp tăng 4 sát thương
+    dmg += (me.level - 1) * 4; 
     for (const mid in monsters) {
         const m = monsters[mid];
         if (dist(me, m) <= range) {
@@ -134,7 +134,7 @@ function hitArea(attackerId, range, dmg) {
         if (qid === attackerId) continue;
         const q = players[qid];
         if (q.dead || dist(me, q) > range) continue;
-        damagePlayer(qid, dmg); // đánh người chơi khác
+        damagePlayer(qid, dmg);
     }
 }
 
@@ -142,7 +142,6 @@ function hitArea(attackerId, range, dmg) {
 io.on('connection', (socket) => {
     console.log('Người chơi kết nối:', socket.username, socket.id);
 
-    // Tải dữ liệu cũ từ users.json
     let savedData = {};
     try {
         const users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
