@@ -1,0 +1,18 @@
+{
+  "admin": {
+    "username": "admin",
+    "hash": "$2b$10$6ZH9KB8VdyAwjPFx3BN7U.D3Gy2NajaOjF2gl2yFf90b88BFZDof6",
+    "createdAt": 1793371055661,
+    "data": {
+      "hp": 200,
+      "maxHp": 200,
+      "mana": 150,
+      "maxMana": 150,
+      "level": 6,
+      "exp": 0,
+      "expNext": 200,
+      "x": 1688.565347801764,
+      "y": 592.9054601617047
+    }
+  }
+}
