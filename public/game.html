@@ -225,9 +225,9 @@
             localStorage.removeItem('username');
         });
 
-        const socket = io({
-            auth: { token: token }
-        });
+        const socket = io(window.location.origin, {
+    auth: { token: token }
+});
 
         socket.on('connect', () => {
             console.log('Đã kết nối Server:', socket.id);
