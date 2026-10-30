@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Game IO - Horror Theme</title>
 
     <style>
@@ -168,57 +167,6 @@
                 font-size: 11px;
             }
         }
-
-        /* ===== TỐI ƯU ĐIỆN THOẠI MÀN HÌNH NGANG ===== */
-        @media screen and (max-width: 900px) and (orientation: landscape) {
-            html, body {
-                width: 100%;
-                height: 100%;
-                margin: 0;
-                overflow: hidden;
-            }
-
-            canvas {
-                width: 100vw;
-                height: 100vh;
-                height: 100dvh;
-            }
-
-            #mobileJoystick {
-                left: max(10px, env(safe-area-inset-left));
-                bottom: max(8px, env(safe-area-inset-bottom));
-                grid-template-columns: 44px 44px 44px;
-                grid-template-rows: 44px 44px 44px;
-                gap: 4px;
-            }
-
-            .moveBtn {
-                width: 44px;
-                height: 44px;
-                font-size: 19px;
-            }
-
-            #attackButton {
-                right: max(88px, calc(env(safe-area-inset-right) + 78px));
-                bottom: max(10px, env(safe-area-inset-bottom));
-                width: 62px;
-                height: 62px;
-                font-size: 10px;
-            }
-
-            #skillButton {
-                right: max(12px, env(safe-area-inset-right));
-                bottom: max(10px, env(safe-area-inset-bottom));
-                width: 62px;
-                height: 62px;
-                font-size: 23px;
-            }
-
-            #skillButton span {
-                font-size: 10px;
-            }
-        }
-
     </style>
 </head>
 
@@ -248,24 +196,22 @@
     <script>
         // Địa chỉ server game
         // Kết nối trực tiếp đến server cùng địa chỉ trang web
-        const socket = io();
+	const socket = io();
+	socket.on('connect', () => {
+    console.log('Đã kết nối Server:', socket.id);
+});
 
-        socket.on('connect', () => {
-            console.log('Đã kết nối Server:', socket.id);
-        });
+socket.on('connect_error', (error) => {
+    console.log('Lỗi kết nối Server:', error.message);
+});
 
-        socket.on('connect_error', (error) => {
-            console.log('Lỗi kết nối Server:', error.message);
-        });
+socket.on('disconnect', (reason) => {
+    console.log('Mất kết nối Server:', reason);
+});
 
-        socket.on('disconnect', (reason) => {
-            console.log('Mất kết nối Server:', reason);
-        });
-
-        socket.on('state', (state) => {
-            console.log('Đã nhận dữ liệu game:', state);
-        });
-
+socket.on('state', (state) => {
+    console.log('Đã nhận dữ liệu game:', state);
+});
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
@@ -1517,17 +1463,10 @@
         });
 
 
-        // ===== THAY ĐỔI KÍCH THƯỚC MÀN HÌNH / XOAY ĐIỆN THOẠI =====
-        function resizeGameCanvas() {
+        // ===== THAY ĐỔI KÍCH THƯỚC MÀN HÌNH =====
+        window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-        }
-
-        window.addEventListener('resize', resizeGameCanvas);
-
-        window.addEventListener('orientationchange', () => {
-            // Đợi trình duyệt cập nhật kích thước sau khi xoay điện thoại.
-            setTimeout(resizeGameCanvas, 150);
         });
 
     </script>
