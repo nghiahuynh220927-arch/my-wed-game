@@ -214,8 +214,20 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
     <script>
-        // Kết nối trực tiếp đến server cùng địa chỉ trang web
-        const socket = io();
+        // Kiểm tra token bảo mật khi vào game
+        const token = localStorage.getItem('token');
+        if (!token) {
+            location.href = '/';
+        }
+
+        window.addEventListener('beforeunload', () => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+        });
+
+        const socket = io({
+            auth: { token: token }
+        });
 
         socket.on('connect', () => {
             console.log('Đã kết nối Server:', socket.id);
@@ -223,6 +235,9 @@
 
         socket.on('connect_error', (error) => {
             console.log('Lỗi kết nối Server:', error.message);
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+            location.href = '/';
         });
 
         socket.on('disconnect', (reason) => {
@@ -238,7 +253,6 @@
         const WORLD_W = 3000;
         const WORLD_H = 2000;
 
-        // ===== BỐ CỤC GIAO DIỆN (tự đổi theo màn hình dọc / ngang) =====
         let showPlayerInfo = false;
         let bigMap = false;
         let playersCache = {};
@@ -274,7 +288,7 @@
 
         const getPanelH = (count) =>
             showPlayerInfo
-                ? UI.panelHSmall + 30 + count * UI.rowH
+                ? UI.panelHSmall + 35 + count * UI.rowH + 40
                 : UI.panelHSmall;
 
         layoutHud();
@@ -285,9 +299,8 @@
         const avatarImg = new Image();
         avatarImg.src = 'avatar.png';
 
-        // ===== SPRITE NHÂN VẬT CHÍNH =====
+        // ===== SPRITE NHÂN VẬT CHÍNH (DI CHUYỂN / ĐỨNG YÊN) =====
         let sprite = null;
-
         const charImg = new Image();
 
         charImg.onload = () => {
@@ -308,8 +321,7 @@
                 const max = Math.max(d[i], d[i + 1], d[i + 2]);
                 const min = Math.min(d[i], d[i + 1], d[i + 2]);
 
-                return d[i + 3] < 10 ||
-                    (min > 100 && (max - min) < 50);
+                return d[i + 3] < 10 || (min > 100 && (max - min) < 50);
             };
 
             const visited = new Uint8Array(w * h);
@@ -317,31 +329,19 @@
 
             const push = (x, y) => {
                 if (x < 0 || y < 0 || x >= w || y >= h) return;
-
                 const p = y * w + x;
-
                 if (visited[p] || !isBg(p * 4)) return;
-
                 visited[p] = 1;
                 stack.push(p);
             };
 
-            for (let x = 0; x < w; x++) {
-                push(x, 0);
-                push(x, h - 1);
-            }
-
-            for (let y = 0; y < h; y++) {
-                push(0, y);
-                push(w - 1, y);
-            }
+            for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
+            for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
 
             while (stack.length) {
                 const p = stack.pop();
-
                 const x = p % w;
                 const y = (p / w) | 0;
-
                 d[p * 4 + 3] = 0;
 
                 push(x + 1, y);
@@ -351,21 +351,14 @@
             }
 
             cx.putImageData(img, 0, 0);
-
             sprite = c;
         };
 
-        charImg.onerror = () => {
-            console.error('Không tải được main.png');
-        };
-
+        charImg.onerror = () => console.error('Không tải được main.png');
         charImg.src = 'main.png';
 
-
-        // ===== SPRITE ĐÁNH THƯỜNG - XÓA NỀN CARO =====
+        // ===== SPRITE TẤN CÔNG (mainattack.png) =====
         let attackSprite = null;
-        let attackCrop = null;
-
         const attackImg = new Image();
 
         attackImg.onload = () => {
@@ -376,30 +369,19 @@
             c.width = w;
             c.height = h;
 
-            const cx = c.getContext('2d', {
-                willReadFrequently: true
-            });
-
+            const cx = c.getContext('2d', { willReadFrequently: true });
             cx.drawImage(attackImg, 0, 0);
 
             const img = cx.getImageData(0, 0, w, h);
             const d = img.data;
 
             for (let i = 0; i < d.length; i += 4) {
-                const r = d[i];
-                const g = d[i + 1];
-                const b = d[i + 2];
-
-                const max = Math.max(r, g, b);
-                const min = Math.min(r, g, b);
-
+                const r = d[i], g = d[i + 1], b = d[i + 2];
+                const max = Math.max(r, g, b), min = Math.min(r, g, b);
                 const difference = max - min;
 
-                const checkerWhite =
-                    min >= 220 && difference <= 18;
-
-                const checkerGray =
-                    min >= 195 && min < 220 && difference <= 12;
+                const checkerWhite = min >= 220 && difference <= 18;
+                const checkerGray = min >= 195 && min < 220 && difference <= 12;
 
                 if (checkerWhite || checkerGray) {
                     d[i + 3] = 0;
@@ -407,88 +389,34 @@
             }
 
             cx.putImageData(img, 0, 0);
-
-            let minX = w;
-            let minY = h;
-            let maxX = -1;
-            let maxY = -1;
-
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    const alpha = d[(y * w + x) * 4 + 3];
-
-                    if (alpha > 10) {
-                        if (x < minX) minX = x;
-                        if (y < minY) minY = y;
-                        if (x > maxX) maxX = x;
-                        if (y > maxY) maxY = y;
-                    }
-                }
-            }
-
-            if (maxX >= minX && maxY >= minY) {
-                attackSprite = c;
-
-                attackCrop = {
-                    x: minX,
-                    y: minY,
-                    w: maxX - minX + 1,
-                    h: maxY - minY + 1
-                };
-
-                console.log('Đã xử lý nền mainattack.png');
-            } else {
-                console.error('Không tìm thấy nhân vật trong mainattack.png');
-            }
+            attackSprite = c;
+            console.log('Đã xử lý nền mainattack.png');
         };
 
-        attackImg.onerror = () => {
-            console.error('Không tải được mainattack.png');
-        };
-
+        attackImg.onerror = () => console.error('Không tải được mainattack.png');
         attackImg.src = 'mainattack.png';
 
         let attackUntil = 0;
         const attackDuration = 450;
 
-
         // ===== ĐIỀU KHIỂN =====
-        let myPos = {
-            x: WORLD_W / 2,
-            y: WORLD_H / 2
-        };
-
+        let myPos = { x: WORLD_W / 2, y: WORLD_H / 2 };
         let moveTarget = null;
-
         let iAmDead = false;
         const speed = 5;
-
-        const keys = {
-            w: false,
-            a: false,
-            s: false,
-            d: false
-        };
-
+        const keys = { w: false, a: false, s: false, d: false };
         let isMoving = false;
 
-
         // ===== CAMERA =====
-        const cam = {
-            x: 0,
-            y: 0
-        };
-
+        const cam = { x: 0, y: 0 };
         const charWidth = 70;
         const charHeight = 90;
 
-
-        // ===== THÔNG BÁO NỔI (tối đa 2, không lặp) =====
+        // ===== THÔNG BÁO NỔI =====
         const toastBox = document.getElementById('toasts');
 
         function showToast(text) {
             const old = Array.from(toastBox.children);
-
             if (old.some(t => t.textContent === text)) return;
 
             while (toastBox.children.length >= 2) {
@@ -507,8 +435,6 @@
             showToast(typeof msg === 'string' ? msg : (msg && msg.text) || '');
         });
 
-
-        // ===== ĐIỀU KHIỂN DI CHUYỂN ĐIỆN THOẠI =====
         function bindMoveButton(id, key) {
             const btn = document.getElementById(id);
 
@@ -518,9 +444,7 @@
 
                 moveTarget = null;
                 keys[key] = true;
-
                 btn.classList.add('active');
-
                 btn.setPointerCapture(e.pointerId);
             });
 
@@ -539,51 +463,53 @@
         bindMoveButton('moveLeft', 'a');
         bindMoveButton('moveRight', 'd');
 
-
-        // ===== HÀM ĐÁNH THƯỜNG =====
         function normalAttack() {
             if (iAmDead) return;
-
             socket.emit('attack');
-
             attackUntil = performance.now() + attackDuration;
         }
 
-        document.getElementById('attackButton')
-            .addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                normalAttack();
-            });
+        document.getElementById('attackButton').addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            normalAttack();
+        });
 
+        document.getElementById('skillButton').addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!iAmDead) {
+                socket.emit('skill');
+                // Dùng chiêu cũng kích hoạt hoạt ảnh vung kiếm
+                attackUntil = performance.now() + attackDuration;
+            }
+        });
 
-        // ===== NÚT KỸ NĂNG ĐIỆN THOẠI =====
-        document.getElementById('skillButton')
-            .addEventListener('pointerdown', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (!iAmDead) {
-                    socket.emit('skill');
-                }
-            });
-
-
-        // ===== CLICK VÀO ĐỊA HÌNH ĐỂ DI CHUYỂN =====
         canvas.addEventListener('click', (e) => {
             const rect = canvas.getBoundingClientRect();
-
-            const screenX =
-                (e.clientX - rect.left) * canvas.width / rect.width;
-
-            const screenY =
-                (e.clientY - rect.top) * canvas.height / rect.height;
+            const screenX = (e.clientX - rect.left) * canvas.width / rect.width;
+            const screenY = (e.clientY - rect.top) * canvas.height / rect.height;
 
             layoutHud();
+            const count = Object.keys(playersCache).length;
+            const panelH = getPanelH(count);
 
-            const panelH = getPanelH(Object.keys(playersCache).length);
+            if (showPlayerInfo) {
+                const btnW = 100;
+                const btnH = 28;
+                const btnX = UI.panelX + (UI.panelW - btnW) / 2;
+                const btnY = UI.panelY + panelH - 36;
 
-            // Chạm bảng thông tin để đóng/mở danh sách người chơi
+                if (screenX >= btnX && screenX <= btnX + btnW && screenY >= btnY && screenY <= btnY + btnH) {
+                    if (confirm('Bạn có muốn đăng xuất tài khoản không?')) {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('username');
+                        location.href = '/';
+                    }
+                    return;
+                }
+            }
+
             if (
                 screenX >= UI.panelX &&
                 screenX <= UI.panelX + UI.panelW &&
@@ -600,30 +526,14 @@
             const worldY = screenY + cam.y;
 
             moveTarget = {
-                x: Math.max(
-                    charWidth / 2,
-                    Math.min(WORLD_W - charWidth / 2, worldX)
-                ),
-                y: Math.max(
-                    charHeight / 2,
-                    Math.min(WORLD_H - charHeight / 2 - 30, worldY)
-                )
+                x: Math.max(charWidth / 2, Math.min(WORLD_W - charWidth / 2, worldX)),
+                y: Math.max(charHeight / 2, Math.min(WORLD_H - charHeight / 2 - 30, worldY))
             };
         });
 
-
-        // ===== BÀN PHÍM =====
         function setKey(e, val) {
             const k = e.key.toLowerCase();
-
-            if (
-                val &&
-                [
-                    'w', 'a', 's', 'd',
-                    'arrowup', 'arrowleft',
-                    'arrowdown', 'arrowright'
-                ].includes(k)
-            ) {
+            if (val && ['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'].includes(k)) {
                 moveTarget = null;
             }
 
@@ -635,48 +545,33 @@
 
         window.addEventListener('keydown', (e) => {
             setKey(e, true);
-
             const k = e.key.toLowerCase();
 
-            // PHÍM R = ĐÁNH THƯỜNG
             if (k === 'r' && !e.repeat) {
                 e.preventDefault();
                 normalAttack();
             }
 
-            // PHÍM 1 = KỸ NĂNG
             if (k === '1' && !iAmDead) {
                 socket.emit('skill');
+                attackUntil = performance.now() + attackDuration;
             }
         });
 
-        window.addEventListener('keyup', (e) => {
-            setKey(e, false);
-        });
+        window.addEventListener('keyup', (e) => setKey(e, false));
 
         window.addEventListener('blur', () => {
-            keys.w = false;
-            keys.a = false;
-            keys.s = false;
-            keys.d = false;
-
-            document.querySelectorAll('.moveBtn').forEach(btn => {
-                btn.classList.remove('active');
-            });
+            keys.w = keys.a = keys.s = keys.d = false;
+            document.querySelectorAll('.moveBtn').forEach(btn => btn.classList.remove('active'));
         });
 
-
-        // ===== NHẬN HỒI SINH =====
         socket.on('respawn', (pos) => {
             myPos.x = pos.x;
             myPos.y = pos.y;
             moveTarget = null;
         });
 
-
-        // ===== HIỆU ỨNG =====
         const fxList = [];
-
         socket.on('fx', (e) => {
             e.born = performance.now();
             fxList.push(e);
@@ -685,16 +580,12 @@
         const lastX = {};
         const facing = {};
 
-
-        // ===== CẬP NHẬT DI CHUYỂN =====
         function updateMovement(me) {
             iAmDead = !!(me && me.dead);
-
             isMoving = false;
 
             if (!iAmDead) {
-                const manualMoving =
-                    keys.w || keys.a || keys.s || keys.d;
+                const manualMoving = keys.w || keys.a || keys.s || keys.d;
 
                 if (keys.w) { myPos.y -= speed; isMoving = true; }
                 if (keys.s) { myPos.y += speed; isMoving = true; }
@@ -704,7 +595,6 @@
                 if (!manualMoving && moveTarget) {
                     const dx = moveTarget.x - myPos.x;
                     const dy = moveTarget.y - myPos.y;
-
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
                     if (distance <= speed) {
@@ -718,22 +608,10 @@
                     }
                 }
 
-                myPos.x = Math.max(
-                    charWidth / 2,
-                    Math.min(WORLD_W - charWidth / 2, myPos.x)
-                );
+                myPos.x = Math.max(charWidth / 2, Math.min(WORLD_W - charWidth / 2, myPos.x));
+                myPos.y = Math.max(charHeight / 2, Math.min(WORLD_H - charHeight / 2 - 30, myPos.y));
 
-                myPos.y = Math.max(
-                    charHeight / 2,
-                    Math.min(WORLD_H - charHeight / 2 - 30, myPos.y)
-                );
-
-                socket.emit('move', {
-                    x: myPos.x,
-                    y: myPos.y,
-                    isMoving: isMoving
-                });
-
+                socket.emit('move', { x: myPos.x, y: myPos.y, isMoving: isMoving });
             } else if (me) {
                 myPos.x = me.x;
                 myPos.y = me.y;
@@ -741,61 +619,35 @@
             }
         }
 
-
-        // ===== CẬP NHẬT CAMERA =====
         function updateCamera() {
             let tx = myPos.x - canvas.width / 2;
             let ty = myPos.y - canvas.height / 2;
 
-            if (WORLD_W > canvas.width) {
-                tx = Math.max(0, Math.min(WORLD_W - canvas.width, tx));
-            } else {
-                tx = (WORLD_W - canvas.width) / 2;
-            }
-
-            if (WORLD_H > canvas.height) {
-                ty = Math.max(0, Math.min(WORLD_H - canvas.height, ty));
-            } else {
-                ty = (WORLD_H - canvas.height) / 2;
-            }
+            tx = WORLD_W > canvas.width ? Math.max(0, Math.min(WORLD_W - canvas.width, tx)) : (WORLD_W - canvas.width) / 2;
+            ty = WORLD_H > canvas.height ? Math.max(0, Math.min(WORLD_H - canvas.height, ty)) : (WORLD_H - canvas.height) / 2;
 
             cam.x += (tx - cam.x) * 0.2;
             cam.y += (ty - cam.y) * 0.2;
         }
 
-
-        // ===== VẼ THANH HP / MP =====
         function drawBar(x, y, w, h, ratio, color) {
             ctx.fillStyle = '#333';
             ctx.fillRect(x, y, w, h);
-
             ctx.fillStyle = color;
-
-            ctx.fillRect(
-                x,
-                y,
-                w * Math.max(0, Math.min(1, ratio)),
-                h
-            );
+            ctx.fillRect(x, y, w * Math.max(0, Math.min(1, ratio)), h);
         }
 
-        // Thanh bo tròn cho bảng nhân vật
         function drawRoundBar(x, y, w, h, ratio, color) {
             const r = h / 2;
-
             ctx.save();
-
             ctx.beginPath();
             ctx.roundRect(x, y, w, h, r);
             ctx.fillStyle = 'rgba(255,255,255,0.12)';
             ctx.fill();
             ctx.clip();
-
             ctx.fillStyle = color;
             ctx.fillRect(x, y, w * Math.max(0, Math.min(1, ratio)), h);
-
             ctx.restore();
-
             ctx.beginPath();
             ctx.roundRect(x, y, w, h, r);
             ctx.strokeStyle = 'rgba(217,180,90,0.55)';
@@ -803,22 +655,16 @@
             ctx.stroke();
         }
 
-
-        // ===== BẢN ĐỒ NHỎ =====
         function drawMinimap(players, monsters) {
             if (UI.portrait) {
-                // Màn dọc: bản đồ tròn, lấy nhân vật làm tâm
                 const d = bigMap ? 190 : 112;
                 const r = d / 2;
-
                 const cxm = canvas.width - r - 10;
                 const cym = r + 10;
-
                 const viewRadius = bigMap ? 1100 : 650;
                 const k = (r - 4) / viewRadius;
 
                 ctx.save();
-
                 ctx.beginPath();
                 ctx.arc(cxm, cym, r, 0, Math.PI * 2);
                 ctx.fillStyle = 'rgba(14, 10, 8, 0.78)';
@@ -829,7 +675,6 @@
 
                 ctx.strokeStyle = 'rgba(217,180,90,0.18)';
                 ctx.lineWidth = 1;
-
                 for (let i = 1; i <= 2; i++) {
                     ctx.beginPath();
                     ctx.arc(cxm, cym, (r - 4) * i / 2, 0, Math.PI * 2);
@@ -838,55 +683,42 @@
 
                 for (const mid in monsters) {
                     const m = monsters[mid];
-
                     const dx = (m.x - myPos.x) * k;
                     const dy = (m.y - myPos.y) * k;
-
                     if (dx * dx + dy * dy > (r - 3) * (r - 3)) continue;
-
                     ctx.fillStyle = '#c070ff';
                     ctx.fillRect(cxm + dx - 1.5, cym + dy - 1.5, 3, 3);
                 }
 
                 for (const id in players) {
                     if (id === socket.id) continue;
-
                     const p = players[id];
-
                     const dx = (p.x - myPos.x) * k;
                     const dy = (p.y - myPos.y) * k;
-
                     if (dx * dx + dy * dy > (r - 3) * (r - 3)) continue;
-
                     ctx.fillStyle = '#ffffff';
                     ctx.beginPath();
                     ctx.arc(cxm + dx, cym + dy, 3, 0, Math.PI * 2);
                     ctx.fill();
                 }
-
                 ctx.restore();
 
-                // Nhân vật ở tâm
                 ctx.fillStyle = '#33ff33';
                 ctx.beginPath();
                 ctx.arc(cxm, cym, 4, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Viền vàng
                 ctx.beginPath();
                 ctx.arc(cxm, cym, r, 0, Math.PI * 2);
                 ctx.strokeStyle = '#d9b45a';
                 ctx.lineWidth = 3;
                 ctx.stroke();
 
-                // Số quái trong tầm nhìn
                 let near = 0;
-
                 for (const mid in monsters) {
                     const m = monsters[mid];
                     const ddx = m.x - myPos.x;
                     const ddy = m.y - myPos.y;
-
                     if (ddx * ddx + ddy * ddy <= viewRadius * viewRadius) near++;
                 }
 
@@ -894,92 +726,60 @@
                 ctx.textAlign = 'center';
                 ctx.fillStyle = '#ffffff';
                 ctx.fillText(near + ' quái gần', cxm, cym + r + 13);
-
                 ctx.restore();
                 return;
             }
 
-            // Màn ngang: bản đồ chữ nhật cũ
             const mw = 160;
             const mh = Math.round(160 * WORLD_H / WORLD_W);
-
             const mx = canvas.width - mw - 15;
             const my = 15;
 
             ctx.save();
-
             ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
             ctx.fillRect(mx, my, mw, mh);
-
             ctx.strokeStyle = '#ff3333';
             ctx.lineWidth = 1.5;
             ctx.strokeRect(mx, my, mw, mh);
 
             for (const mid in monsters) {
                 const m = monsters[mid];
-
                 ctx.fillStyle = '#c070ff';
-
-                ctx.fillRect(
-                    mx + m.x / WORLD_W * mw - 1.5,
-                    my + m.y / WORLD_H * mh - 1.5,
-                    3,
-                    3
-                );
+                ctx.fillRect(mx + m.x / WORLD_W * mw - 1.5, my + m.y / WORLD_H * mh - 1.5, 3, 3);
             }
 
             for (const id in players) {
                 const p = players[id];
-
                 ctx.fillStyle = id === socket.id ? '#33ff33' : '#ffffff';
-
                 ctx.beginPath();
-
-                ctx.arc(
-                    mx + p.x / WORLD_W * mw,
-                    my + p.y / WORLD_H * mh,
-                    3,
-                    0,
-                    Math.PI * 2
-                );
-
+                ctx.arc(mx + p.x / WORLD_W * mw, my + p.y / WORLD_H * mh, 3, 0, Math.PI * 2);
                 ctx.fill();
             }
-
             ctx.restore();
         }
 
-
-        // ===== BẢNG NHÂN VẬT GÓC TRÊN TRÁI =====
         function drawPlayerPanel(players) {
             const { panelX, panelY, panelW, panelHSmall, rowH, portrait } = UI;
-
             const count = Object.keys(players).length;
             const panelH = getPanelH(count);
-
-            const myPlayer =
-                players[socket.id] || Object.values(players)[0];
+            const myPlayer = players[socket.id] || Object.values(players)[0];
 
             ctx.save();
             ctx.textAlign = 'left';
 
-            // Khung thông tin
             ctx.beginPath();
             ctx.roundRect(panelX, panelY, panelW, panelH, portrait ? 12 : 4);
             ctx.fillStyle = 'rgba(18, 12, 10, 0.88)';
             ctx.fill();
-
             ctx.strokeStyle = portrait ? '#d9b45a' : '#ff3333';
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Ảnh đại diện
             const avatarR = portrait ? 22 : 29;
             const avatarX = panelX + 10 + avatarR;
             const avatarY = panelY + (portrait ? 33 : 44);
 
             ctx.save();
-
             ctx.beginPath();
             ctx.arc(avatarX, avatarY, avatarR, 0, Math.PI * 2);
             ctx.fillStyle = '#111111';
@@ -995,7 +795,6 @@
                     (avatarR - 3) * 2
                 );
             }
-
             ctx.restore();
 
             ctx.beginPath();
@@ -1005,19 +804,12 @@
             ctx.stroke();
 
             if (myPlayer) {
-                const hp = myPlayer.hp ?? 100;
-                const maxHp = myPlayer.maxHp ?? 100;
-
-                const mana = myPlayer.mana ?? 100;
-                const maxMana = myPlayer.maxMana ?? 100;
-
-                const exp = myPlayer.exp ?? 0;
-                const expNext = myPlayer.expNext ?? 50;
-                const level = myPlayer.level ?? 1;
+                const hp = myPlayer.hp ?? 100, maxHp = myPlayer.maxHp ?? 100;
+                const mana = myPlayer.mana ?? 100, maxMana = myPlayer.maxMana ?? 100;
+                const exp = myPlayer.exp ?? 0, expNext = myPlayer.expNext ?? 50, level = myPlayer.level ?? 1;
 
                 const barX = avatarX + avatarR + (portrait ? 9 : 12);
                 const barW = panelX + panelW - 8 - barX;
-
                 const barH = portrait ? 7 : 8;
 
                 const nameY = panelY + (portrait ? 17 : 22);
@@ -1026,47 +818,27 @@
                 const mpLabelY = panelY + (portrait ? 51 : 68);
                 const mpBarY = panelY + (portrait ? 55 : 73);
 
-                // Tên + cấp độ
                 ctx.fillStyle = '#33ff33';
                 ctx.font = 'bold ' + (portrait ? 12 : 13) + 'px Arial';
-
                 ctx.fillText('Bạn (Player)  |  Lv ' + level, barX, nameY);
 
                 ctx.fillStyle = '#ffffff';
                 ctx.font = (portrait ? 10 : 11) + 'px Arial';
-
-                // HP
                 ctx.fillText('HP: ' + hp + '/' + maxHp, barX, hpLabelY);
 
-                if (portrait) {
-                    drawRoundBar(barX, hpBarY, barW, barH, maxHp > 0 ? hp / maxHp : 0, '#e03a3a');
-                } else {
-                    drawBar(barX, hpBarY, barW, barH, maxHp > 0 ? hp / maxHp : 0, '#ff3333');
-                }
+                if (portrait) drawRoundBar(barX, hpBarY, barW, barH, maxHp > 0 ? hp / maxHp : 0, '#e03a3a');
+                else drawBar(barX, hpBarY, barW, barH, maxHp > 0 ? hp / maxHp : 0, '#ff3333');
 
-                // MP
                 ctx.fillStyle = '#ffffff';
                 ctx.fillText('MP: ' + mana + '/' + maxMana, barX, mpLabelY);
 
-                if (portrait) {
-                    drawRoundBar(barX, mpBarY, barW, barH, maxMana > 0 ? mana / maxMana : 0, '#33b8ee');
-                } else {
-                    drawBar(barX, mpBarY, barW, barH, maxMana > 0 ? mana / maxMana : 0, '#33ccff');
-                }
+                if (portrait) drawRoundBar(barX, mpBarY, barW, barH, maxMana > 0 ? mana / maxMana : 0, '#33b8ee');
+                else drawBar(barX, mpBarY, barW, barH, maxMana > 0 ? mana / maxMana : 0, '#33ccff');
 
-                // EXP (mép dưới bảng)
                 const expH = portrait ? 12 : 14;
                 const expY = panelY + panelHSmall - expH / 2 - 1;
 
-                drawBar(
-                    panelX,
-                    expY,
-                    panelW,
-                    expH,
-                    expNext > 0 ? exp / expNext : 0,
-                    '#d9a800'
-                );
-
+                drawBar(panelX, expY, panelW, expH, expNext > 0 ? exp / expNext : 0, '#d9a800');
                 ctx.strokeStyle = portrait ? '#d9b45a' : '#ff3333';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(panelX, expY, panelW, expH);
@@ -1074,87 +846,72 @@
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold ' + (portrait ? 9 : 10) + 'px Arial';
                 ctx.textAlign = 'center';
-
-                ctx.fillText(
-                    'LEVEL ' + level + '  |  EXP: ' + exp + '/' + expNext,
-                    panelX + panelW / 2,
-                    expY + (portrait ? 9.5 : 11)
-                );
-
+                ctx.fillText('LEVEL ' + level + '  |  EXP: ' + exp + '/' + expNext, panelX + panelW / 2, expY + (portrait ? 9.5 : 11));
                 ctx.textAlign = 'left';
             }
 
-            // Danh sách người chơi
             if (showPlayerInfo) {
                 ctx.strokeStyle = '#662222';
                 ctx.lineWidth = 1;
-
                 ctx.beginPath();
                 ctx.moveTo(panelX + 10, panelY + panelHSmall + 18);
                 ctx.lineTo(panelX + panelW - 10, panelY + panelHSmall + 18);
                 ctx.stroke();
 
                 let index = 0;
-
                 for (const id in players) {
                     const p = players[id];
                     const isMe = id === socket.id;
-
                     const rowY = panelY + panelHSmall + 38 + index * rowH;
 
                     ctx.fillStyle = isMe ? '#33ff33' : '#ffffff';
                     ctx.font = (portrait ? 11 : 12) + 'px Arial';
                     ctx.textAlign = 'left';
-
-                    ctx.fillText(
-                        isMe
-                            ? 'Bạn (Player)'
-                            : 'Player (' + id.substring(0, 4) + '...)',
-                        panelX + 12,
-                        rowY
-                    );
-
-                    ctx.fillText(
-                        'HP: ' + (p.hp ?? 100) +
-                        ' | MP: ' + (p.mana ?? 100) +
-                        ' | Lv: ' + (p.level ?? 1),
-                        panelX + (portrait ? 98 : 160),
-                        rowY
-                    );
-
+                    ctx.fillText(isMe ? 'Bạn (Player)' : 'Player (' + id.substring(0, 4) + '...)', panelX + 12, rowY);
+                    ctx.fillText('HP: ' + (p.hp ?? 100) + ' | MP: ' + (p.mana ?? 100) + ' | Lv: ' + (p.level ?? 1), panelX + (portrait ? 98 : 160), rowY);
                     index++;
                 }
+
+                const btnW = 100;
+                const btnH = 28;
+                const btnX = panelX + (panelW - btnW) / 2;
+                const btnY = panelY + panelH - 36;
+
+                ctx.beginPath();
+                ctx.roundRect(btnX, btnY, btnW, btnH, 8);
+                ctx.fillStyle = 'rgba(180, 30, 30, 0.95)';
+                ctx.fill();
+                ctx.strokeStyle = '#d9b45a';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                ctx.fillStyle = '#f3ece0';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Đăng xuất', btnX + btnW / 2, btnY + btnH / 2);
             }
 
             ctx.restore();
         }
 
-
-        // ===== NHẬN TRẠNG THÁI SERVER =====
+        // ===== GAME LOOP =====
         socket.on('state', (state) => {
             const players = state.players || state;
             const monsters = state.monsters || {};
-
             const me = players[socket.id];
-
             playersCache = players;
 
             layoutHud();
-
             updateMovement(me);
             updateCamera();
 
             ctx.setTransform(1, 0, 0, 1, 0, 0);
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-
-            // ===== THẾ GIỚI =====
             ctx.save();
-
             ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
 
             if (bgImg.complete && bgImg.naturalWidth !== 0) {
@@ -1164,272 +921,92 @@
                 ctx.fillRect(0, 0, WORLD_W, WORLD_H);
             }
 
-            ctx.strokeStyle = '#ff3333';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
-
-
-            // ===== QUÁI VẬT =====
             for (const mid in monsters) {
                 const m = monsters[mid];
-
                 ctx.fillStyle = '#5a1a7a';
-
                 ctx.beginPath();
                 ctx.arc(m.x, m.y, 22, 0, Math.PI * 2);
                 ctx.fill();
-
                 ctx.strokeStyle = '#c070ff';
                 ctx.lineWidth = 2;
                 ctx.stroke();
-
-                ctx.fillStyle = '#ffee33';
-
-                ctx.beginPath();
-                ctx.arc(m.x - 8, m.y - 4, 4, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.arc(m.x + 8, m.y - 4, 4, 0, Math.PI * 2);
-                ctx.fill();
-
-                drawBar(
-                    m.x - 20,
-                    m.y - 36,
-                    40,
-                    5,
-                    m.hp / m.maxHp,
-                    '#ff3333'
-                );
+                drawBar(m.x - 20, m.y - 36, 40, 5, m.hp / m.maxHp, '#ff3333');
             }
 
-
-            // ===== NGƯỜI CHƠI =====
+            const now = performance.now();
             for (const id in players) {
                 const p = players[id];
-
-                const radius = 25;
-                const useSprite = sprite !== null;
-
                 ctx.globalAlpha = p.dead ? 0.35 : 1;
 
-                if (useSprite) {
+                if (sprite !== null) {
                     if (lastX[id] !== undefined) {
-                        if (p.x < lastX[id] - 0.1) {
-                            facing[id] = -1;
-                        } else if (p.x > lastX[id] + 0.1) {
-                            facing[id] = 1;
-                        }
+                        if (p.x < lastX[id] - 0.1) facing[id] = -1;
+                        else if (p.x > lastX[id] + 0.1) facing[id] = 1;
                     }
-
                     lastX[id] = p.x;
-
                     const dir = facing[id] || 1;
 
-                    const fw = sprite.width / 2;
-                    const sx = p.isMoving ? fw : 0;
+                    // Kiểm tra xem người chơi có đang trong thời gian ra đòn (đánh/dùng skill) không
+                    const isAttacking = (id === socket.id && now < attackUntil);
+                    const currentImg = isAttacking && attackSprite !== null ? attackSprite : sprite;
+
+                    const fw = currentImg.width / (isAttacking ? 1 : 2);
+                    const sx = (!isAttacking && p.isMoving) ? fw : 0;
 
                     ctx.save();
-
                     ctx.translate(p.x, p.y);
                     ctx.scale(-dir, 1);
-
-                    if (
-                        id === socket.id &&
-                        !p.dead &&
-                        performance.now() < attackUntil &&
-                        attackSprite !== null &&
-                        attackCrop !== null
-                    ) {
-                        ctx.drawImage(
-                            attackSprite,
-                            attackCrop.x,
-                            attackCrop.y,
-                            attackCrop.w,
-                            attackCrop.h,
-                            -charWidth / 2,
-                            -charHeight / 2,
-                            charWidth,
-                            charHeight
-                        );
-                    } else {
-                        ctx.drawImage(
-                            sprite,
-                            sx,
-                            0,
-                            fw,
-                            sprite.height,
-                            -charWidth / 2,
-                            -charHeight / 2,
-                            charWidth,
-                            charHeight
-                        );
-                    }
-
+                    ctx.drawImage(
+                        currentImg,
+                        sx, 0, fw, currentImg.height,
+                        -charWidth / 2, -charHeight / 2, charWidth, charHeight
+                    );
                     ctx.restore();
-
                 } else {
                     ctx.beginPath();
-                    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                    ctx.arc(p.x, p.y, 25, 0, Math.PI * 2);
                     ctx.fillStyle = p.color || '#ff3333';
                     ctx.fill();
                 }
 
-
-                // ===== THANH HP / MP TRÊN ĐẦU =====
-                const barW = 50;
-                const barH = 6;
-
-                const barX = p.x - barW / 2;
-
-                const barY = useSprite
-                    ? (p.y + charHeight / 2 + 5)
-                    : (p.y + radius + 10);
-
-                const hp = p.hp ?? 100;
-                const mana = p.mana ?? 100;
-
-                const mHp = p.maxHp ?? 100;
-                const mMana = p.maxMana ?? 100;
-
-                drawBar(barX, barY, barW, barH, hp / mHp, '#ff3333');
-                drawBar(barX, barY + 8, barW, barH, mana / mMana, '#33ccff');
-
-                ctx.fillStyle = '#ffffff';
-                ctx.font = '10px Arial';
-                ctx.textAlign = 'center';
-
-                ctx.fillText(
-                    p.dead
-                        ? 'ĐÃ NGÃ'
-                        : 'Lv' + (p.level ?? 1) +
-                          '  HP: ' + hp +
-                          ' | MP: ' + mana,
-                    p.x,
-                    barY + 24
-                );
-
+                const barW = 50, barH = 6, barX = p.x - barW / 2;
+                const barY = sprite !== null ? (p.y + charHeight / 2 + 5) : (p.y + 35);
+                drawBar(barX, barY, barW, barH, (p.hp ?? 100) / (p.maxHp ?? 100), '#ff3333');
+                drawBar(barX, barY + 8, barW, barH, (p.mana ?? 100) / (p.maxMana ?? 100), '#33ccff');
                 ctx.globalAlpha = 1;
             }
 
-
-            // ===== HIỆU ỨNG ĐÁNH =====
-            const now = performance.now();
-
+            // ===== VẼ HIỆU ỨNG KỸ NĂNG (FX) =====
             for (let i = fxList.length - 1; i >= 0; i--) {
-                const e = fxList[i];
-                const t = now - e.born;
+                const f = fxList[i];
+                const age = now - f.born;
+                const life = 500;
 
-                if (e.type === 'slash') {
-                    if (t > 200) {
-                        fxList.splice(i, 1);
-                        continue;
-                    }
-
-                    ctx.strokeStyle = 'rgba(255,255,255,' + (1 - t / 200) + ')';
-                    ctx.lineWidth = 4;
-
-                    ctx.beginPath();
-                    ctx.arc(e.x, e.y, e.r * (0.5 + t / 400), 0, Math.PI * 2);
-                    ctx.stroke();
-
-                } else if (e.type === 'blast') {
-                    if (t > 400) {
-                        fxList.splice(i, 1);
-                        continue;
-                    }
-
-                    ctx.fillStyle = 'rgba(255,120,20,' + (0.5 * (1 - t / 400)) + ')';
-
-                    ctx.beginPath();
-                    ctx.arc(e.x, e.y, e.r * (0.4 + t / 700), 0, Math.PI * 2);
-                    ctx.fill();
-
-                } else if (e.type === 'dmg') {
-                    if (t > 700) {
-                        fxList.splice(i, 1);
-                        continue;
-                    }
-
-                    ctx.fillStyle = 'rgba(255,230,80,' + (1 - t / 700) + ')';
-                    ctx.font = 'bold 16px Arial';
-                    ctx.textAlign = 'center';
-
-                    ctx.fillText('-' + e.v, e.x, e.y - t / 20);
-
-                } else if (e.type === 'exp') {
-                    if (t > 1000) {
-                        fxList.splice(i, 1);
-                        continue;
-                    }
-
-                    ctx.fillStyle = 'rgba(255,214,51,' + (1 - t / 1000) + ')';
-                    ctx.font = 'bold 15px Arial';
-                    ctx.textAlign = 'center';
-
-                    ctx.fillText('+' + e.v + ' EXP', e.x, e.y - t / 25);
-
-                } else if (e.type === 'levelup') {
-                    if (t > 1200) {
-                        fxList.splice(i, 1);
-                        continue;
-                    }
-
-                    ctx.fillStyle = 'rgba(80,255,120,' + (1 - t / 1200) + ')';
-                    ctx.font = 'bold 22px Arial';
-                    ctx.textAlign = 'center';
-
-                    ctx.fillText('LEVEL UP!', e.x, e.y - t / 15);
-
-                } else {
+                if (age >= life) {
                     fxList.splice(i, 1);
+                    continue;
                 }
-            }
 
-            ctx.restore();
-
-
-            // ===== GIAO DIỆN (HUD) =====
-            drawPlayerPanel(players);
-
-
-            // ===== MÀN HÌNH KHI CHẾT =====
-            if (iAmDead) {
+                const ratio = age / life;
                 ctx.save();
-
-                ctx.fillStyle = 'rgba(80,0,0,0.45)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold ' + (UI.portrait ? 28 : 36) + 'px Arial';
-                ctx.textAlign = 'center';
-
-                ctx.fillText('BẠN ĐÃ BỊ HẠ', canvas.width / 2, canvas.height / 2);
-
-                ctx.font = '16px Arial';
-
-                ctx.fillText('Đang hồi sinh...', canvas.width / 2, canvas.height / 2 + 30);
-
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, 10 + ratio * 55, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(217, 180, 90, ${1 - ratio})`;
+                ctx.lineWidth = 3;
+                ctx.stroke();
                 ctx.restore();
             }
 
-
-            // ===== BẢN ĐỒ NHỎ =====
+            ctx.restore();
+            drawPlayerPanel(players);
             drawMinimap(players, monsters);
         });
 
-
-        // ===== THAY ĐỔI KÍCH THƯỚC / XOAY MÀN HÌNH =====
-        function onResize() {
+        window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-
             layoutHud();
-        }
-
-        window.addEventListener('resize', onResize);
-        window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
-
+        });
     </script>
 </body>
 </html>
