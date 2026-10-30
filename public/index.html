@@ -195,13 +195,8 @@
 
     <script>
         // Địa chỉ server game
-        const SERVER_URL = 'https://ten-game-cua-ban.onrender.com';
-
-        const isLocal = location.hostname === 'localhost' ||
-                        location.hostname === '127.0.0.1';
-
-        const socket = isLocal ? io() : io(SERVER_URL);
-
+        // Kết nối trực tiếp đến server cùng địa chỉ trang web
+	const socket = io();
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
