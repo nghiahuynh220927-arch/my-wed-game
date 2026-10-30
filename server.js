@@ -9,8 +9,7 @@ const server = http.createServer(app);
 
 const ALLOWED_ORIGINS = [
     'http://localhost:3000',
-    'https://ten-game-cua-ban.pages.dev',
-    'https://ten-game-cua-ban.netlify.app'
+    'https://my-wed-game.onrender.com'
 ];
 const io = new Server(server, {
     cors: { origin: ALLOWED_ORIGINS }
@@ -76,7 +75,6 @@ function addExp(socketId, amount) {
         p.mana = p.maxMana;
         io.emit('fx', { type: 'levelup', x: p.x, y: p.y - 60 });
     }
-    // Lưu ngay khi có thay đổi cấp độ / kinh nghiệm
     saveUserData(p.name, {
         hp: p.hp, maxHp: p.maxHp, mana: p.mana, maxMana: p.maxMana,
         level: p.level, exp: p.exp, expNext: p.expNext, x: p.x, y: p.y
@@ -128,12 +126,17 @@ function hitArea(attackerId, range, dmg) {
             }
         }
     }
+    for (const qid in players) {
+        if (qid === attackerId) continue;
+        const q = players[qid];
+        if (q.dead || dist(me, q) > range) continue;
+        damagePlayer(qid, dmg);
+    }
 }
 
 io.on('connection', (socket) => {
     console.log('Người chơi kết nối:', socket.username, socket.id);
 
-    // Đọc dữ liệu đã lưu từ users.json (nếu có)
     let savedData = {};
     try {
         const users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
@@ -146,25 +149,28 @@ io.on('connection', (socket) => {
     players[socket.id] = {
         x: savedData.x ?? rand(200, WORLD_W - 200),
         y: savedData.y ?? rand(200, WORLD_H - 200),
-        hp: savedData.hp ?? 100,
-        maxHp: savedData.maxHp ?? 100,
-        mana: savedData.mana ?? 100,
-        maxMana: savedData.maxMana ?? 100,
-        level: savedData.level ?? 1,
-        exp: savedData.exp ?? 0,
+        isMoving: false, 
+        hp: savedData.hp ?? 100, 
+        mana: savedData.mana ?? 100, 
+        color: '#ff3333',
+        maxHp: savedData.maxHp ?? 100, 
+        maxMana: savedData.maxMana ?? 100, 
+        level: savedData.level ?? 1, 
+        exp: savedData.exp ?? 0, 
         expNext: savedData.expNext ?? 50,
-        dead: false,
-        name: socket.username,
-        lastAttack: 0,
+        dead: false, 
+        lastAttack: 0, 
         lastSkill: 0,
-        isMoving: false
+        name: socket.username
     };
+    
+    socket.emit('respawn', { x: players[socket.id].x, y: players[socket.id].y });
 
     socket.on('move', (data) => {
         const p = players[socket.id];
         if (!p || p.dead || !data) return;
-        p.x = data.x;
-        p.y = data.y;
+        if (typeof data.x === 'number') p.x = Math.max(0, Math.min(WORLD_W, data.x));
+        if (typeof data.y === 'number') p.y = Math.max(0, Math.min(WORLD_H, data.y));
         p.isMoving = !!data.isMoving;
     });
 
@@ -174,7 +180,6 @@ io.on('connection', (socket) => {
         const now = Date.now();
         if (now - p.lastAttack < ATTACK.cooldown) return;
         p.lastAttack = now;
-
         io.emit('fx', { type: 'slash', x: p.x, y: p.y, r: ATTACK.range });
         hitArea(socket.id, ATTACK.range, ATTACK.dmg);
     });
@@ -186,7 +191,6 @@ io.on('connection', (socket) => {
         if (now - p.lastSkill < SKILL.cooldown || p.mana < SKILL.mana) return;
         p.lastSkill = now;
         p.mana -= SKILL.mana;
-
         io.emit('fx', { type: 'blast', x: p.x, y: p.y, r: SKILL.range });
         hitArea(socket.id, SKILL.range, SKILL.dmg);
         saveUserData(p.name, {
@@ -195,21 +199,18 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('disconnect', () => {
-        console.log('Người chơi thoát:', socket.id);
+    socket.on('disconnect', () => { 
         const p = players[socket.id];
         if (p) {
-            // Lưu lại vị trí và chỉ số khi người chơi thoát game
             saveUserData(p.name, {
                 hp: p.hp, maxHp: p.maxHp, mana: p.mana, maxMana: p.maxMana,
                 level: p.level, exp: p.exp, expNext: p.expNext, x: p.x, y: p.y
             });
         }
-        delete players[socket.id];
+        delete players[socket.id]; 
     });
 });
 
-// ---- HỒI MANA MỖI GIÂY ----
 setInterval(() => {
     for (const id in players) {
         const p = players[id];
@@ -217,12 +218,11 @@ setInterval(() => {
     }
 }, 1000);
 
-// ---- VÒNG LẶP AI QUÁI ĐUỔI VÀ TẤN CÔNG (60 FPS) ----
 setInterval(() => {
     const now = Date.now();
     for (const mid in monsters) {
         const m = monsters[mid];
-        let target = null, best = 1000; // Tầm nhìn 1000px để quái chủ động rượt đuổi
+        let target = null, best = 1000;
         for (const id in players) {
             const p = players[id];
             if (p.dead) continue;
@@ -231,7 +231,6 @@ setInterval(() => {
         }
         if (!target) continue;
         const t = players[target];
-        
         if (best > 40) {
             const angle = Math.atan2(t.y - m.y, t.x - m.x);
             m.x += Math.cos(angle) * m.speed;
@@ -243,7 +242,6 @@ setInterval(() => {
     }
 }, 1000 / 60);
 
-// ---- VÒNG LẶP GỬI STATE VỀ CHO CLIENT (60 FPS) ----
 setInterval(() => {
     io.emit('state', { players, monsters });
 }, 1000 / 60);
