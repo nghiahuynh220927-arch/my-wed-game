@@ -210,12 +210,11 @@
             msg.textContent = 'Đang xử lý...';
 
             try {
-                const res = await fetch('/api/' + mode, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
+                const res = await fetch(window.location.origin + '/api/' + mode, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+});
                 const data = await res.json();
 
                 if (!res.ok) {
